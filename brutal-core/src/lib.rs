@@ -5,14 +5,54 @@ use tracing::trace;
 const SLOT_COUNT: usize = 5;
 
 /// Configuration for the Brutal congestion controller.
+///
+/// Brutal is a bandwidth-hint-driven congestion controller that derives its
+/// congestion window from an estimated bandwidth-delay product (BDP) rather
+/// than using traditional additive-increase/multiplicative-decrease behavior.
+///
+/// Since the current controller interface does not provide pacing control,
+/// the configured bandwidth is used only as a reference for computing the
+/// target congestion window, not as a strict sending rate limit.
 #[derive(Debug, Clone)]
 pub struct BrutalConfigCore {
+    /// Default target bandwidth in bits per second.
+    ///
+    /// This value is used until a more accurate bandwidth hint is provided by
+    /// the application or peer. It is interpreted as an input to BDP-based
+    /// window calculation rather than a precise pacing rate.
     pub default_bandwidth_bps: u64,
+    /// Initial RTT estimate used before enough RTT samples are available.
+    ///
+    /// This is used to bootstrap the initial congestion window calculation.
     pub initial_rtt: Duration,
+    /// Minimum congestion window, in bytes.
+    ///
+    /// The computed window will never be reduced below this value.
     pub min_window: u64,
+    /// Multiplier applied to BDP when calculating cwnd.
+    ///
+    /// With no pacing support in the controller trait, values > 1.0 make the
+    /// sender more burst-tolerant / aggressive, but also increase the chance of
+    /// exceeding the configured bandwidth in short timescales.
+    ///
+    /// Default: 1.25
     pub cwnd_gain: f64,
+    /// Minimum ACK rate clamp, only used when `enable_ack_rate_compensation` is true.
+    ///
+    /// Default: 0.8
     pub min_ack_rate: f64,
+
+    /// Minimum sample count before ACK-rate estimation becomes active.
+    ///
+    /// Default: 50
     pub min_sample_count: u64,
+    /// Whether to compensate cwnd by dividing by ack_rate.
+    ///
+    /// Disabled by default because this controller has no pacing hook, so enabling
+    /// it can make the connection significantly more bursty and exceed the nominal
+    /// configured bandwidth on short timescales.
+    ///
+    /// Default: false
     pub enable_ack_rate_compensation: bool,
 }
 
@@ -31,6 +71,11 @@ impl Default for BrutalConfigCore {
 }
 
 impl BrutalConfigCore {
+    /// Creates a new Brutal congestion controller configuration.
+    ///
+    /// `default_bandwidth_bps` specifies the initial target bandwidth, in bits
+    /// per second, used for BDP-based window estimation before an explicit
+    /// bandwidth hint is supplied.
     pub fn new(default_bandwidth_bps: u64) -> Self {
         Self {
             default_bandwidth_bps,
@@ -46,6 +91,17 @@ struct PktInfoSlot {
     loss_count: u64,
 }
 
+/// A bandwidth-hint-based congestion controller using a BDP-style window model.
+///
+/// Brutal computes its congestion window from the estimated bandwidth-delay
+/// product using the configured or externally provided bandwidth hint together
+/// with RTT measurements. Unlike traditional loss-based controllers, it does
+/// not primarily rely on additive growth on ACKs and multiplicative reduction
+/// on loss events.
+///
+/// In environments where pacing is unavailable, this controller should be
+/// understood as controlling the amount of in-flight data rather than enforcing
+/// a strict transmission rate.
 #[derive(Debug, Clone)]
 pub struct BrutalCore {
     pub config: BrutalConfigCore,
