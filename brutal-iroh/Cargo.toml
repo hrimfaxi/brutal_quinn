@@ -1,0 +1,11 @@
+[package]
+name = "brutal-iroh"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+brutal-core = { path = "../brutal-core" }
+tracing = "0.1"
+
+iroh-quinn = { git = "https://github.com/hrimfaxi/iroh_quinn", branch = "brutal" }
+iroh-quinn-proto = { git = "https://github.com/hrimfaxi/iroh_quinn", branch = "brutal", package = "iroh-quinn-proto" }

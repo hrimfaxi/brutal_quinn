@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "brutal-core",
+    "brutal-iroh",
+    "brutal-jls",
+]
+
+resolver = "2"

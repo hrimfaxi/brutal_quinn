@@ -1,0 +1,10 @@
+[package]
+name = "brutal-jls"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+brutal-core = { path = "../brutal-core" }
+tracing = "0.1"
+
+quinn_proto_jls = { package = "quinn-proto", git = "https://github.com/hrimfaxi/quinn-jls", branch="brutal", default-features = false, features = ["rustls", "ring"] }
