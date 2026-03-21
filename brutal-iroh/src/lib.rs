@@ -11,8 +11,12 @@ use tracing::trace;
 pub struct BrutalConfig(pub BrutalConfigCore);
 
 impl BrutalConfig {
-    pub fn new(default_bandwidth_bps: u64) -> Self {
-        Self(BrutalConfigCore::new(default_bandwidth_bps))
+    pub fn new(default_bandwidth_bps: u64, cwnd_gain: f64, enable_ack_compensation: bool) -> Self {
+        Self(BrutalConfigCore::new(
+            default_bandwidth_bps,
+            cwnd_gain,
+            enable_ack_compensation,
+        ))
     }
 
     pub fn inner(&self) -> &BrutalConfigCore {
