@@ -218,7 +218,18 @@ impl BrutalCore {
     }
 
     pub fn update_smoothed_rtt(&mut self, rtt: Duration) {
-        self.smoothed_rtt = Some(rtt);
+        match self.smoothed_rtt {
+            None => {
+                self.smoothed_rtt = Some(rtt);
+            }
+            Some(srtt) => {
+                // SRTT = (7/8 * SRTT) + (1/8 * Sample)
+                let srtt_ns = srtt.as_nanos() as f64;
+                let sample_ns = rtt.as_nanos() as f64;
+                let new_srtt_ns = (0.875 * srtt_ns) + (0.125 * sample_ns);
+                self.smoothed_rtt = Some(Duration::from_nanos(new_srtt_ns as u64));
+            }
+        }
     }
 
     pub fn initial_window(&self) -> u64 {
