@@ -342,6 +342,7 @@ dependencies = [
 [[package]]
 name = "iroh-quinn"
 version = "0.16.1"
+source = "git+https://github.com/hrimfaxi/iroh_quinn?branch=brutal#a7e47fc3a2754ef0c474bab33454a0642c1acc2c"
 dependencies = [
  "bytes",
  "cfg_aliases",
@@ -361,6 +362,7 @@ dependencies = [
 [[package]]
 name = "iroh-quinn-proto"
 version = "0.15.1"
+source = "git+https://github.com/hrimfaxi/iroh_quinn?branch=brutal#a7e47fc3a2754ef0c474bab33454a0642c1acc2c"
 dependencies = [
  "bytes",
  "derive_more",
@@ -386,6 +388,7 @@ dependencies = [
 [[package]]
 name = "iroh-quinn-udp"
 version = "0.8.0"
+source = "git+https://github.com/hrimfaxi/iroh_quinn?branch=brutal#a7e47fc3a2754ef0c474bab33454a0642c1acc2c"
 dependencies = [
  "cfg_aliases",
  "libc",
@@ -546,6 +549,7 @@ dependencies = [
 [[package]]
 name = "quinn-proto"
 version = "0.11.10"
+source = "git+https://github.com/hrimfaxi/quinn-jls?branch=brutal#2eb8719a08a83f550aee6b9c3c929209f28df074"
 dependencies = [
  "bytes",
  "getrandom 0.3.4",

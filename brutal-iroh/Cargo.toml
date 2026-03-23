@@ -7,7 +7,9 @@ edition = "2021"
 brutal-core = { path = "../brutal-core" }
 tracing = "0.1"
 
-iroh-quinn = { path = "/home/hrimfaxi/iroh_quinn/quinn", package = "iroh-quinn" }
-iroh-quinn-proto = { path = "/home/hrimfaxi/iroh_quinn/quinn-proto", package = "iroh-quinn-proto" }
+iroh-quinn = { git = "https://github.com/hrimfaxi/iroh_quinn", branch = "brutal", package = "iroh-quinn" }
+iroh-quinn-proto = { git = "https://github.com/hrimfaxi/iroh_quinn", branch = "brutal", package = "iroh-quinn-proto" }
+#iroh-quinn = { path = "/home/hrimfaxi/iroh_quinn/quinn", package = "iroh-quinn" }
+#iroh-quinn-proto = { path = "/home/hrimfaxi/iroh_quinn/quinn-proto", package = "iroh-quinn-proto" }
 dashmap = "6.1.0"
 once_cell = "1.21.4"

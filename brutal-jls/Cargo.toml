@@ -7,7 +7,7 @@ edition = "2021"
 brutal-core = { path = "../brutal-core" }
 tracing = "0.1"
 
-#quinn_proto_jls = { package = "quinn-proto", git = "https://github.com/hrimfaxi/quinn-jls", branch="brutal", default-features = false, features = ["rustls", "ring"] }
-quinn_proto_jls = { package = "quinn-proto", path = "/home/hrimfaxi/quinn-jls/quinn-proto", default-features = false, features = ["rustls", "ring"] }
+quinn_proto_jls = { package = "quinn-proto", git = "https://github.com/hrimfaxi/quinn-jls", branch="brutal", default-features = false, features = ["rustls", "ring"] }
+#quinn_proto_jls = { package = "quinn-proto", path = "/home/hrimfaxi/quinn-jls/quinn-proto", default-features = false, features = ["rustls", "ring"] }
 dashmap = "6.1.0"
 once_cell = "1.21.4"
