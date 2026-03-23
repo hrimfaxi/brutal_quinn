@@ -55,8 +55,10 @@ name = "brutal-iroh"
 version = "0.1.0"
 dependencies = [
  "brutal-core",
+ "dashmap",
  "iroh-quinn",
  "iroh-quinn-proto",
+ "once_cell",
  "tracing",
 ]
 
@@ -340,7 +342,6 @@ dependencies = [
 [[package]]
 name = "iroh-quinn"
 version = "0.16.1"
-source = "git+https://github.com/hrimfaxi/iroh_quinn?branch=brutal#ea029bd7d7bae8144661825bab35091195e8cb50"
 dependencies = [
  "bytes",
  "cfg_aliases",
@@ -360,7 +361,6 @@ dependencies = [
 [[package]]
 name = "iroh-quinn-proto"
 version = "0.15.1"
-source = "git+https://github.com/hrimfaxi/iroh_quinn?branch=brutal#ea029bd7d7bae8144661825bab35091195e8cb50"
 dependencies = [
  "bytes",
  "derive_more",
@@ -386,13 +386,12 @@ dependencies = [
 [[package]]
 name = "iroh-quinn-udp"
 version = "0.8.0"
-source = "git+https://github.com/hrimfaxi/iroh_quinn?branch=brutal#ea029bd7d7bae8144661825bab35091195e8cb50"
 dependencies = [
  "cfg_aliases",
  "libc",
  "socket2",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

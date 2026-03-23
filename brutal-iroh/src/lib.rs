@@ -1,14 +1,19 @@
 use std::any::Any;
-use std::sync::Arc;
+use std::net::SocketAddr;
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Instant;
 
 use brutal_core::{BrutalConfigCore, BrutalCore};
-use iroh_quinn_proto::congestion::{CongestionParameter, Controller, ControllerFactory};
+use dashmap::DashMap;
+use iroh_quinn_proto::congestion::{Controller, ControllerFactory};
 use iroh_quinn_proto::{ConfigError, RttEstimator};
+use once_cell::sync::Lazy;
 use tracing::trace;
 
 #[derive(Debug, Clone, Default)]
 pub struct BrutalConfig(pub BrutalConfigCore);
+
+pub use brutal_core::CongestionParameter;
 
 impl BrutalConfig {
     pub fn new(default_bandwidth_bps: u64, cwnd_gain: f64, enable_ack_compensation: bool) -> Self {
@@ -28,12 +33,85 @@ impl BrutalConfig {
     }
 }
 
+#[derive(Debug, Default)]
+struct BrutalControl {
+    peer_bandwidth_hint: Mutex<Option<u64>>,
+    cwnd_gain: Mutex<Option<f64>>,
+    ack_compensation: Mutex<Option<bool>>,
+}
+
+impl BrutalControl {
+    fn new() -> Self {
+        Self {
+            peer_bandwidth_hint: Mutex::new(None),
+            cwnd_gain: Mutex::new(None),
+            ack_compensation: Mutex::new(None),
+        }
+    }
+
+    fn store_parameter(&self, param: CongestionParameter) {
+        match param {
+            CongestionParameter::PeerBandwidthHint(v) => {
+                *self.peer_bandwidth_hint.lock().expect("mutex poisoned") = Some(v);
+            }
+            CongestionParameter::CwndGain(v) => {
+                *self.cwnd_gain.lock().expect("mutex poisoned") = Some(v);
+            }
+            CongestionParameter::AckCompensation(v) => {
+                *self.ack_compensation.lock().expect("mutex poisoned") = Some(v);
+            }
+        }
+    }
+
+    fn take_peer_bandwidth_hint(&self) -> Option<u64> {
+        self.peer_bandwidth_hint
+            .lock()
+            .expect("mutex poisoned")
+            .take()
+    }
+
+    fn take_cwnd_gain(&self) -> Option<f64> {
+        self.cwnd_gain.lock().expect("mutex poisoned").take()
+    }
+
+    fn take_ack_compensation(&self) -> Option<bool> {
+        self.ack_compensation.lock().expect("mutex poisoned").take()
+    }
+}
+
+static BRUTAL_REGISTRY: Lazy<DashMap<SocketAddr, Weak<BrutalControl>>> =
+    Lazy::new(|| DashMap::new());
+
+fn register_controller(remote: SocketAddr, control: &Arc<BrutalControl>) {
+    BRUTAL_REGISTRY.insert(remote, Arc::downgrade(control));
+}
+
+pub fn set_parameter_by_remote(
+    remote: SocketAddr,
+    param: CongestionParameter,
+) -> Result<(), ConfigError> {
+    if let Some(entry) = BRUTAL_REGISTRY.get(&remote) {
+        if let Some(control) = entry.value().upgrade() {
+            control.store_parameter(param);
+            return Ok(());
+        }
+    }
+
+    BRUTAL_REGISTRY.remove(&remote);
+    Err(ConfigError::OutOfBounds)
+}
+
 impl ControllerFactory for BrutalConfig {
-    fn build(self: Arc<Self>, now: Instant, current_mtu: u16) -> Box<dyn Controller> {
+    fn build(
+        self: Arc<Self>,
+        now: Instant,
+        current_mtu: u16,
+        remote: &SocketAddr,
+    ) -> Box<dyn Controller> {
         let cfg = self.0.clone();
 
         trace!(
-            "[brutal] build called: default_bandwidth_bps={}, initial_rtt_ms={}, min_window={}, cwnd_gain={}, min_ack_rate={}, min_sample_count={}, enable_ack_rate_compensation={}, mtu={}",
+            "[brutal] build called: default_bandwidth_bps={}, initial_rtt_ms={}, min_window={}, cwnd_gain={}, min_ack_rate={}, min_sample_count={}, enable_ack_rate_compensation={}, mtu={}, remote={}",
             cfg.default_bandwidth_bps,
             cfg.initial_rtt.as_millis(),
             cfg.min_window,
@@ -42,14 +120,83 @@ impl ControllerFactory for BrutalConfig {
             cfg.min_sample_count,
             cfg.enable_ack_rate_compensation,
             current_mtu,
+            remote,
         );
 
-        Box::new(Brutal(BrutalCore::new(cfg, now, current_mtu)))
+        let control = Arc::new(BrutalControl::new());
+        register_controller(*remote, &control);
+
+        Box::new(Brutal {
+            core: BrutalCore::new(cfg, now, current_mtu),
+            remote: *remote,
+            control,
+        })
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Brutal(pub BrutalCore);
+pub struct Brutal {
+    core: BrutalCore,
+    remote: SocketAddr,
+    control: Arc<BrutalControl>,
+}
+
+impl Brutal {
+    fn apply_parameter(&mut self, param: CongestionParameter) -> Result<(), ConfigError> {
+        match param {
+            CongestionParameter::PeerBandwidthHint(bps) => {
+                self.core.set_peer_bandwidth_hint(Some(bps));
+                self.core.refresh_cwnd();
+            }
+
+            CongestionParameter::CwndGain(gain) => {
+                if gain <= 0.0 {
+                    return Err(ConfigError::OutOfBounds);
+                }
+                self.core.config.cwnd_gain = gain;
+                self.core.refresh_cwnd();
+            }
+
+            CongestionParameter::AckCompensation(enable) => {
+                self.core.config.enable_ack_rate_compensation = enable;
+                self.core.refresh_cwnd();
+            }
+        }
+
+        trace!(
+            "[brutal] parameter applied: remote={}, cwnd={}, target_bps={}, ack_comp={}, cwnd_gain={}",
+            self.remote,
+            self.core.cwnd,
+            self.core.target_bps(),
+            self.core.config.enable_ack_rate_compensation,
+            self.core.config.cwnd_gain,
+        );
+
+        Ok(())
+    }
+
+    fn apply_pending_parameters(&mut self) -> Result<(), ConfigError> {
+        if let Some(v) = self.control.take_peer_bandwidth_hint() {
+            self.apply_parameter(CongestionParameter::PeerBandwidthHint(v))?;
+        }
+
+        if let Some(v) = self.control.take_cwnd_gain() {
+            self.apply_parameter(CongestionParameter::CwndGain(v))?;
+        }
+
+        if let Some(v) = self.control.take_ack_compensation() {
+            self.apply_parameter(CongestionParameter::AckCompensation(v))?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Drop for Brutal {
+    fn drop(&mut self) {
+        BRUTAL_REGISTRY.remove(&self.remote);
+    }
+}
 
 impl Controller for Brutal {
     fn into_any(self: Box<Self>) -> Box<dyn Any> {
@@ -57,15 +204,16 @@ impl Controller for Brutal {
     }
 
     fn initial_window(&self) -> u64 {
-        self.0.initial_window()
+        self.core.initial_window()
     }
 
     fn window(&self) -> u64 {
-        self.0.window_recomputed()
+        self.core.window_recomputed()
     }
 
     fn on_sent(&mut self, _now: Instant, bytes: u64, _last_packet_number: u64) {
-        self.0.on_sent(bytes);
+        let _ = self.apply_pending_parameters();
+        self.core.on_sent(bytes);
     }
 
     fn on_ack(
@@ -76,7 +224,8 @@ impl Controller for Brutal {
         _app_limited: bool,
         rtt: &RttEstimator,
     ) {
-        self.0.on_ack_bytes(bytes, rtt.get());
+        let _ = self.apply_pending_parameters();
+        self.core.on_ack_bytes(bytes, rtt.get());
     }
 
     fn on_end_acks(
@@ -86,7 +235,8 @@ impl Controller for Brutal {
         _app_limited: bool,
         _largest_packet_num_acked: Option<u64>,
     ) {
-        self.0.on_end_acks(now);
+        let _ = self.apply_pending_parameters();
+        self.core.on_end_acks(now);
     }
 
     fn on_congestion_event(
@@ -97,36 +247,16 @@ impl Controller for Brutal {
         _is_ecn: bool,
         lost_bytes: u64,
     ) {
-        self.0.on_loss_bytes(lost_bytes);
+        let _ = self.apply_pending_parameters();
+        self.core.on_loss_bytes(lost_bytes);
     }
 
     fn on_mtu_update(&mut self, new_mtu: u16) {
-        self.0.on_mtu_update(new_mtu);
+        let _ = self.apply_pending_parameters();
+        self.core.on_mtu_update(new_mtu);
     }
 
     fn clone_box(&self) -> Box<dyn Controller> {
         Box::new(self.clone())
-    }
-
-    fn set_parameter(&mut self, param: CongestionParameter) -> Result<(), ConfigError> {
-        match param {
-            CongestionParameter::PeerBandwidthHint(bps) => {
-                self.0.set_peer_bandwidth_hint(Some(bps));
-                self.0.refresh_cwnd();
-            }
-
-            CongestionParameter::CwndGain(gain) => {
-                if gain <= 0.0 {
-                    return Err(ConfigError::OutOfBounds);
-                }
-                self.0.config.cwnd_gain = gain;
-                self.0.refresh_cwnd();
-            }
-
-            CongestionParameter::AckCompensation(enable) => {
-                self.0.config.enable_ack_rate_compensation = enable;
-            }
-        }
-        Ok(())
     }
 }

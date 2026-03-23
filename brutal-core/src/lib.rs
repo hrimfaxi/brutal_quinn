@@ -4,6 +4,17 @@ use tracing::trace;
 
 const SLOT_COUNT: usize = 5;
 
+/// Brutal congestion controller parameter
+#[derive(Debug, Clone)]
+pub enum CongestionParameter {
+    /// brutal bandwidth hint
+    PeerBandwidthHint(u64),
+    /// brutal cwnd gain
+    CwndGain(f64),
+    /// brutal ack AckCompensation
+    AckCompensation(bool),
+}
+
 /// Configuration for the Brutal congestion controller.
 ///
 /// Brutal is a bandwidth-hint-driven congestion controller that derives its
