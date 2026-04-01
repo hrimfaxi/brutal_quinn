@@ -3,16 +3,30 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use brutal_core::{BrutalConfigCore, BrutalCore};
-use iroh_quinn_proto::congestion::{CongestionParameter, Controller, ControllerFactory};
-use iroh_quinn_proto::{ConfigError, RttEstimator};
+use iroh_quinn_proto::congestion::{Controller, ControllerFactory};
+use iroh_quinn_proto::RttEstimator;
 use tracing::trace;
 
 #[derive(Debug, Clone, Default)]
 pub struct BrutalConfig(pub BrutalConfigCore);
 
 impl BrutalConfig {
-    pub fn new(default_bandwidth_bps: u64) -> Self {
-        Self(BrutalConfigCore::new(default_bandwidth_bps))
+    pub fn new(
+        default_bandwidth_bps: u64,
+        min_window: u64,
+        cwnd_gain: f64,
+        min_ack_rate: f64,
+        min_sample_count: u64,
+        enable_ack_rate_compensation: bool,
+    ) -> Self {
+        Self(BrutalConfigCore::new(
+            default_bandwidth_bps,
+            min_window,
+            cwnd_gain,
+            min_ack_rate,
+            min_sample_count,
+            enable_ack_rate_compensation,
+        ))
     }
 
     pub fn inner(&self) -> &BrutalConfigCore {
@@ -102,27 +116,5 @@ impl Controller for Brutal {
 
     fn clone_box(&self) -> Box<dyn Controller> {
         Box::new(self.clone())
-    }
-
-    fn set_parameter(&mut self, param: CongestionParameter) -> Result<(), ConfigError> {
-        match param {
-            CongestionParameter::PeerBandwidthHint(bps) => {
-                self.0.set_peer_bandwidth_hint(Some(bps));
-                self.0.refresh_cwnd();
-            }
-
-            CongestionParameter::CwndGain(gain) => {
-                if gain <= 0.0 {
-                    return Err(ConfigError::OutOfBounds);
-                }
-                self.0.config.cwnd_gain = gain;
-                self.0.refresh_cwnd();
-            }
-
-            CongestionParameter::AckCompensation(enable) => {
-                self.0.config.enable_ack_rate_compensation = enable;
-            }
-        }
-        Ok(())
     }
 }
