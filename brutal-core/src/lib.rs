@@ -76,9 +76,21 @@ impl BrutalConfigCore {
     /// `default_bandwidth_bps` specifies the initial target bandwidth, in bits
     /// per second, used for BDP-based window estimation before an explicit
     /// bandwidth hint is supplied.
-    pub fn new(default_bandwidth_bps: u64) -> Self {
+    pub fn new(
+        default_bandwidth_bps: u64,
+        min_window: u64,
+        cwnd_gain: f64,
+        min_ack_rate: f64,
+        min_sample_count: u64,
+        enable_ack_rate_compensation: bool,
+    ) -> Self {
         Self {
             default_bandwidth_bps,
+            min_window,
+            cwnd_gain,
+            min_ack_rate,
+            min_sample_count,
+            enable_ack_rate_compensation,
             ..Default::default()
         }
     }

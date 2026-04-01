@@ -7,4 +7,5 @@ edition = "2021"
 brutal-core = { path = "../brutal-core" }
 tracing = "0.1"
 
-quinn_proto_jls = { package = "quinn-proto", git = "https://github.com/hrimfaxi/quinn-jls", branch="brutal", default-features = false, features = ["rustls", "ring"] }
+quinn_proto_jls = { package = "quinn-proto", git = "https://github.com/spongebob888/quinn-jls", tag = "quinn-0.11.7-0.3.1", default-features = false, features = ["rustls", "ring"]}
+#quinn_proto_jls = { package = "quinn-proto", git = "https://github.com/hrimfaxi/quinn-jls", branch="brutal", default-features = false, features = ["rustls", "ring"] }
